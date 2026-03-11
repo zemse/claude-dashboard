@@ -32,6 +32,7 @@ export interface DailyUsage {
   date: string;
   totalCost: number;
   projects: Record<string, number>;
+  models: Record<string, number>;
   usage: TokenUsage;
 }
 

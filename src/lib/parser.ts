@@ -269,6 +269,7 @@ function aggregateData(sessions: ParsedSession[]): DashboardData {
           date,
           totalCost: 0,
           projects: {},
+          models: {},
           usage: emptyUsage(),
         };
         dailyMap.set(date, daily);
@@ -276,6 +277,9 @@ function aggregateData(sessions: ParsedSession[]): DashboardData {
       daily.totalCost += session.cost;
       daily.projects[session.projectName] =
         (daily.projects[session.projectName] ?? 0) + session.cost;
+      for (const [model, cost] of Object.entries(session.costByModel)) {
+        daily.models[model] = (daily.models[model] ?? 0) + cost;
+      }
       addUsage(daily.usage, session.usage);
 
       if (!project.dailyUsage[date]) {
