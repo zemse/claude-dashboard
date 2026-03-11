@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { DEFAULT_PRICING } from "@/lib/pricing";
 import type { PricingConfig, ProjectSummary } from "@/lib/types";
-import { RefreshCw, Settings as SettingsIcon } from "lucide-react";
+import { RefreshCw, Settings as SettingsIcon, Star } from "lucide-react";
 
 function BrowserCheck() {
   if (typeof window.showDirectoryPicker === "undefined") {
@@ -98,6 +98,16 @@ export default function App() {
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
           <h1 className="text-lg font-bold">Claude Code Dashboard</h1>
           <div className="flex items-center gap-2">
+            <a
+              href="https://github.com/zemse/claude-dashboard"
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Star on GitHub"
+              className="inline-flex items-center justify-center gap-1.5 rounded-md text-sm font-medium h-9 px-3 hover:bg-accent hover:text-accent-foreground transition-colors"
+            >
+              <Star className="h-4 w-4" />
+              <span className="hidden sm:inline">Star</span>
+            </a>
             <Button
               variant="ghost"
               size="icon"
