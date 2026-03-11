@@ -5,9 +5,8 @@ import type {
   DailyUsage,
   MonthlyUsage,
   DashboardData,
-  PricingConfig,
 } from "./types";
-import { calculateCost } from "./pricing";
+import { calculateCost, getPricingForModel, DEFAULT_PRICING } from "./pricing";
 
 function emptyUsage(): TokenUsage {
   return {
@@ -26,11 +25,7 @@ function addUsage(target: TokenUsage, source: TokenUsage): void {
 }
 
 function projectNameFromFolder(folderName: string): string {
-  // Folder names are like "-Users-sohamzemse-Workspace-project-name"
-  // Convert to a readable path
   const parts = folderName.replace(/^-/, "").split("-");
-  // Try to find a meaningful short name from the path
-  // Skip common prefixes like Users, username, Workspace
   const meaningfulParts: string[] = [];
   let foundWorkspace = false;
   for (const part of parts) {
@@ -47,7 +42,6 @@ function projectNameFromFolder(folderName: string): string {
     meaningfulParts.push(part);
   }
   if (meaningfulParts.length === 0) {
-    // Fallback: just use last 2-3 parts
     return parts.slice(-3).join("/");
   }
   return meaningfulParts.join("/");
@@ -60,6 +54,7 @@ interface JsonlLine {
   timestamp?: string;
   message?: {
     role?: string;
+    model?: string;
     usage?: {
       input_tokens?: number;
       output_tokens?: number;
@@ -95,17 +90,20 @@ function extractUsage(line: JsonlLine): TokenUsage | null {
 
 async function parseJsonlFile(
   file: File,
-  folderName: string,
-  pricing: PricingConfig
+  folderName: string
 ): Promise<ParsedSession | null> {
   const text = await file.text();
   const lines = text.split("\n").filter((l) => l.trim());
 
   const sessionUsage = emptyUsage();
+  const costByModel: Record<string, number> = {};
+  let totalCost = 0;
   let messageCount = 0;
   let firstTimestamp: string | null = null;
   let lastTimestamp: string | null = null;
   let projectCwd: string | null = null;
+  let primaryModel: string | null = null;
+  const modelCounts: Record<string, number> = {};
 
   for (const line of lines) {
     try {
@@ -126,6 +124,16 @@ async function parseJsonlFile(
       if (usage) {
         addUsage(sessionUsage, usage);
         messageCount++;
+
+        // Detect model and calculate cost per-message
+        const model = parsed.message?.model;
+        if (model && model !== "<synthetic>") {
+          modelCounts[model] = (modelCounts[model] ?? 0) + 1;
+          const pricing = getPricingForModel(model);
+          const msgCost = calculateCost(usage, pricing);
+          totalCost += msgCost;
+          costByModel[model] = (costByModel[model] ?? 0) + msgCost;
+        }
       }
     } catch {
       // skip malformed lines
@@ -133,6 +141,19 @@ async function parseJsonlFile(
   }
 
   if (messageCount === 0) return null;
+
+  // Primary model = most frequently used
+  if (Object.keys(modelCounts).length > 0) {
+    primaryModel = Object.entries(modelCounts).sort(
+      ([, a], [, b]) => b - a
+    )[0][0];
+  }
+
+  // If no model was detected on any message, use fallback pricing
+  if (totalCost === 0 && messageCount > 0) {
+    totalCost = calculateCost(sessionUsage, DEFAULT_PRICING);
+    costByModel["unknown"] = totalCost;
+  }
 
   const sessionId = file.name.replace(".jsonl", "");
   const projectName = projectCwd
@@ -144,22 +165,22 @@ async function parseJsonlFile(
     projectPath: folderName,
     projectName,
     usage: sessionUsage,
-    cost: calculateCost(sessionUsage, pricing),
+    cost: totalCost,
     messageCount,
     firstTimestamp,
     lastTimestamp,
+    model: primaryModel,
+    costByModel,
   };
 }
 
 export async function parseDirectory(
   handle: FileSystemDirectoryHandle,
-  pricing: PricingConfig,
   onProgress?: (current: number, total: number) => void
 ): Promise<DashboardData> {
   const sessions: ParsedSession[] = [];
   const jsonlFiles: { file: File; folderName: string }[] = [];
 
-  // Walk the directory: projects/<project-hash>/<session>.jsonl
   for await (const [projectDirName, projectEntry] of handle.entries()) {
     if (projectEntry.kind !== "directory") continue;
     const projectDir = projectEntry as FileSystemDirectoryHandle;
@@ -175,33 +196,43 @@ export async function parseDirectory(
   let current = 0;
 
   for (const { file, folderName } of jsonlFiles) {
-    const session = await parseJsonlFile(file, folderName, pricing);
+    const session = await parseJsonlFile(file, folderName);
     if (session) sessions.push(session);
     current++;
     onProgress?.(current, total);
   }
 
-  return aggregateData(sessions, pricing);
+  return aggregateData(sessions);
 }
 
-function aggregateData(
-  sessions: ParsedSession[],
-  _pricing: PricingConfig
-): DashboardData {
+function aggregateData(sessions: ParsedSession[]): DashboardData {
   const projectMap = new Map<string, ProjectSummary>();
   const dailyMap = new Map<string, DailyUsage>();
   const monthlyMap = new Map<string, MonthlyUsage>();
+  const modelBreakdown: Record<string, { cost: number; tokens: number }> = {};
 
   let totalCost = 0;
   let totalTokens = 0;
 
   for (const session of sessions) {
     totalCost += session.cost;
-    totalTokens +=
+    const sessionTokens =
       session.usage.input_tokens +
       session.usage.output_tokens +
       session.usage.cache_read_input_tokens +
       session.usage.cache_creation_input_tokens;
+    totalTokens += sessionTokens;
+
+    // Model breakdown
+    for (const [model, cost] of Object.entries(session.costByModel)) {
+      if (!modelBreakdown[model]) {
+        modelBreakdown[model] = { cost: 0, tokens: 0 };
+      }
+      modelBreakdown[model].cost += cost;
+    }
+    if (session.model && modelBreakdown[session.model]) {
+      modelBreakdown[session.model].tokens += sessionTokens;
+    }
 
     // Project aggregation
     let project = projectMap.get(session.projectPath);
@@ -247,14 +278,12 @@ function aggregateData(
         (daily.projects[session.projectName] ?? 0) + session.cost;
       addUsage(daily.usage, session.usage);
 
-      // Project daily
       if (!project.dailyUsage[date]) {
         project.dailyUsage[date] = { cost: 0, usage: emptyUsage() };
       }
       project.dailyUsage[date].cost += session.cost;
       addUsage(project.dailyUsage[date].usage, session.usage);
 
-      // Monthly aggregation
       const month = date.slice(0, 7);
       let monthly = monthlyMap.get(month);
       if (!monthly) {
@@ -303,5 +332,6 @@ function aggregateData(
     totalTokens,
     mostExpensiveProject,
     busiestDay,
+    modelBreakdown,
   };
 }

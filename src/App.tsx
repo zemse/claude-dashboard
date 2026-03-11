@@ -10,8 +10,7 @@ import { ProjectDetail } from "@/components/ProjectDetail";
 import { Settings } from "@/components/Settings";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { DEFAULT_PRICING } from "@/lib/pricing";
-import type { PricingConfig, ProjectSummary } from "@/lib/types";
+import type { ProjectSummary } from "@/lib/types";
 import { RefreshCw, Settings as SettingsIcon, Star } from "lucide-react";
 
 function BrowserCheck() {
@@ -34,7 +33,6 @@ function BrowserCheck() {
 export default function App() {
   const { state, selectFolder, setHandle, reconnect, disconnect } = useFolder();
   const { data, loading, progress, error, loadData } = useUsageData();
-  const [pricing, setPricing] = useState<PricingConfig>(DEFAULT_PRICING);
   const [selectedProject, setSelectedProject] =
     useState<ProjectSummary | null>(null);
   const [showSettings, setShowSettings] = useState(false);
@@ -44,21 +42,14 @@ export default function App() {
 
   useEffect(() => {
     if (state.status === "ready") {
-      loadData(state.handle, pricing);
+      loadData(state.handle);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.status === "ready" ? state.handle : null]);
 
-  const handlePricingChange = (newPricing: PricingConfig) => {
-    setPricing(newPricing);
-    if (state.status === "ready") {
-      loadData(state.handle, newPricing);
-    }
-  };
-
   const handleRefresh = () => {
     if (state.status === "ready") {
-      loadData(state.handle, pricing);
+      loadData(state.handle);
     }
   };
 
@@ -195,8 +186,6 @@ export default function App() {
                   {showSettings && (
                     <div className="lg:col-span-1">
                       <Settings
-                        pricing={pricing}
-                        onPricingChange={handlePricingChange}
                         data={data}
                         onDisconnect={disconnect}
                       />

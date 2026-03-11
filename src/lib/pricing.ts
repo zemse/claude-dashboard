@@ -1,21 +1,60 @@
-import type { ModelPreset, PricingConfig, TokenUsage } from "./types";
+import type { PricingConfig, TokenUsage } from "./types";
 
-export const MODEL_PRESETS: ModelPreset[] = [
+// Model ID pattern -> pricing
+const MODEL_PRICING: { pattern: RegExp; name: string; pricing: PricingConfig }[] = [
   {
-    name: "Claude Sonnet 4",
-    pricing: { input: 3.0, output: 15.0, cacheRead: 0.3, cacheWrite: 3.75 },
-  },
-  {
-    name: "Claude Opus 4",
+    pattern: /^claude-opus-4-[56]/,
+    name: "Opus 4",
     pricing: { input: 15.0, output: 75.0, cacheRead: 1.5, cacheWrite: 18.75 },
   },
   {
-    name: "Claude Haiku 3.5",
+    pattern: /^claude-sonnet-4/,
+    name: "Sonnet 4",
+    pricing: { input: 3.0, output: 15.0, cacheRead: 0.3, cacheWrite: 3.75 },
+  },
+  {
+    pattern: /^claude-haiku-4/,
+    name: "Haiku 4",
     pricing: { input: 0.8, output: 4.0, cacheRead: 0.08, cacheWrite: 1.0 },
+  },
+  {
+    pattern: /^sonnet$/,
+    name: "Sonnet",
+    pricing: { input: 3.0, output: 15.0, cacheRead: 0.3, cacheWrite: 3.75 },
+  },
+  {
+    pattern: /^haiku$/,
+    name: "Haiku",
+    pricing: { input: 0.8, output: 4.0, cacheRead: 0.08, cacheWrite: 1.0 },
+  },
+  {
+    pattern: /^opus$/,
+    name: "Opus",
+    pricing: { input: 15.0, output: 75.0, cacheRead: 1.5, cacheWrite: 18.75 },
   },
 ];
 
-export const DEFAULT_PRICING: PricingConfig = MODEL_PRESETS[0].pricing;
+// Default fallback: Sonnet pricing
+export const DEFAULT_PRICING: PricingConfig = {
+  input: 3.0,
+  output: 15.0,
+  cacheRead: 0.3,
+  cacheWrite: 3.75,
+};
+
+export function getPricingForModel(modelId: string): PricingConfig {
+  for (const entry of MODEL_PRICING) {
+    if (entry.pattern.test(modelId)) return entry.pricing;
+  }
+  return DEFAULT_PRICING;
+}
+
+export function getModelDisplayName(modelId: string): string {
+  for (const entry of MODEL_PRICING) {
+    if (entry.pattern.test(modelId)) return entry.name;
+  }
+  return modelId;
+}
 
 export function calculateCost(
   usage: TokenUsage,

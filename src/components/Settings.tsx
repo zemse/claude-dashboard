@@ -1,4 +1,3 @@
-import { useState } from "react";
 import {
   Card,
   CardContent,
@@ -6,49 +5,16 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import type { DashboardData, PricingConfig } from "@/lib/types";
-import { MODEL_PRESETS } from "@/lib/pricing";
+import type { DashboardData } from "@/lib/types";
+import { formatCost, formatTokens, getModelDisplayName } from "@/lib/pricing";
 
 interface SettingsProps {
-  pricing: PricingConfig;
-  onPricingChange: (pricing: PricingConfig) => void;
   data: DashboardData | null;
   onDisconnect: () => void;
 }
 
-export function Settings({
-  pricing,
-  onPricingChange,
-  data,
-  onDisconnect,
-}: SettingsProps) {
-  const [customPricing, setCustomPricing] = useState(pricing);
-
-  const handlePresetChange = (presetName: string | null) => {
-    if (!presetName) return;
-    const preset = MODEL_PRESETS.find((p) => p.name === presetName);
-    if (preset) {
-      setCustomPricing(preset.pricing);
-      onPricingChange(preset.pricing);
-    }
-  };
-
-  const handleCustomChange = (key: keyof PricingConfig, value: string) => {
-    const num = parseFloat(value);
-    if (isNaN(num) || num < 0) return;
-    const updated = { ...customPricing, [key]: num };
-    setCustomPricing(updated);
-    onPricingChange(updated);
-  };
-
+export function Settings({ data, onDisconnect }: SettingsProps) {
   const exportData = (format: "json" | "csv") => {
     if (!data) return;
 
@@ -65,6 +31,7 @@ export function Settings({
         [
           "Date",
           "Project",
+          "Model",
           "Cost",
           "Input Tokens",
           "Output Tokens",
@@ -76,6 +43,7 @@ export function Settings({
         rows.push([
           session.firstTimestamp?.slice(0, 10) ?? "",
           session.projectName,
+          session.model ?? "unknown",
           session.cost.toFixed(4),
           session.usage.input_tokens.toString(),
           session.usage.output_tokens.toString(),
@@ -97,13 +65,9 @@ export function Settings({
     URL.revokeObjectURL(url);
   };
 
-  const currentPreset = MODEL_PRESETS.find(
-    (p) =>
-      p.pricing.input === customPricing.input &&
-      p.pricing.output === customPricing.output &&
-      p.pricing.cacheRead === customPricing.cacheRead &&
-      p.pricing.cacheWrite === customPricing.cacheWrite
-  );
+  const modelEntries = data
+    ? Object.entries(data.modelBreakdown).sort(([, a], [, b]) => b.cost - a.cost)
+    : [];
 
   return (
     <Card>
@@ -111,55 +75,34 @@ export function Settings({
         <CardTitle className="text-lg">Settings</CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
-        <div className="space-y-3">
-          <label className="text-sm font-medium">Model Pricing</label>
-          <Select
-            value={currentPreset?.name ?? "custom"}
-            onValueChange={handlePresetChange}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {MODEL_PRESETS.map((p) => (
-                <SelectItem key={p.name} value={p.name}>
-                  {p.name}
-                </SelectItem>
-              ))}
-              {!currentPreset && (
-                <SelectItem value="custom" disabled>
-                  Custom
-                </SelectItem>
-              )}
-            </SelectContent>
-          </Select>
-
-          <div className="grid grid-cols-2 gap-3">
-            {(
-              [
-                ["input", "Input (per 1M)"],
-                ["output", "Output (per 1M)"],
-                ["cacheRead", "Cache Read (per 1M)"],
-                ["cacheWrite", "Cache Write (per 1M)"],
-              ] as const
-            ).map(([key, label]) => (
-              <div key={key} className="space-y-1">
-                <label className="text-xs text-muted-foreground">{label}</label>
-                <div className="flex items-center">
-                  <span className="text-sm text-muted-foreground mr-1">$</span>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={customPricing[key]}
-                    onChange={(e) => handleCustomChange(key, e.target.value)}
-                    className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm"
-                  />
+        {modelEntries.length > 0 && (
+          <div className="space-y-3">
+            <label className="text-sm font-medium">Detected Models</label>
+            <div className="space-y-2">
+              {modelEntries.map(([model, info]) => (
+                <div
+                  key={model}
+                  className="flex items-center justify-between text-sm"
+                >
+                  <span className="text-muted-foreground">
+                    {getModelDisplayName(model)}
+                  </span>
+                  <div className="text-right">
+                    <span className="font-mono">{formatCost(info.cost)}</span>
+                    {info.tokens > 0 && (
+                      <span className="text-xs text-muted-foreground ml-2">
+                        {formatTokens(info.tokens)}
+                      </span>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Pricing is auto-detected from model IDs in session data.
+            </p>
           </div>
-        </div>
+        )}
 
         <Separator />
 

@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import type { DashboardData, PricingConfig } from "@/lib/types";
+import type { DashboardData } from "@/lib/types";
 import { parseDirectory } from "@/lib/parser";
 
 interface UsageDataState {
@@ -18,10 +18,10 @@ export function useUsageData() {
   });
 
   const loadData = useCallback(
-    async (handle: FileSystemDirectoryHandle, pricing: PricingConfig) => {
+    async (handle: FileSystemDirectoryHandle) => {
       setState({ data: null, loading: true, progress: null, error: null });
       try {
-        const data = await parseDirectory(handle, pricing, (current, total) => {
+        const data = await parseDirectory(handle, (current, total) => {
           setState((prev) => ({ ...prev, progress: { current, total } }));
         });
         setState({ data, loading: false, progress: null, error: null });

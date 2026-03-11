@@ -14,6 +14,8 @@ export interface ParsedSession {
   messageCount: number;
   firstTimestamp: string | null;
   lastTimestamp: string | null;
+  model: string | null;
+  costByModel: Record<string, number>;
 }
 
 export interface ProjectSummary {
@@ -58,11 +60,7 @@ export interface DashboardData {
   totalTokens: number;
   mostExpensiveProject: string | null;
   busiestDay: string | null;
+  modelBreakdown: Record<string, { cost: number; tokens: number }>;
 }
 
 export type DateRange = "7d" | "30d" | "90d" | "all";
-
-export interface ModelPreset {
-  name: string;
-  pricing: PricingConfig;
-}
