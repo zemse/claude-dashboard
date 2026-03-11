@@ -32,7 +32,7 @@ function BrowserCheck() {
 }
 
 export default function App() {
-  const { state, selectFolder, reconnect, disconnect } = useFolder();
+  const { state, selectFolder, setHandle, reconnect, disconnect } = useFolder();
   const { data, loading, progress, error, loadData } = useUsageData();
   const [pricing, setPricing] = useState<PricingConfig>(DEFAULT_PRICING);
   const [selectedProject, setSelectedProject] =
@@ -78,13 +78,14 @@ export default function App() {
   }
 
   if (state.status === "no-handle") {
-    return <Onboarding onSelectFolder={selectFolder} />;
+    return <Onboarding onSelectFolder={selectFolder} onDropHandle={setHandle} />;
   }
 
   if (state.status === "needs-permission") {
     return (
       <Onboarding
         onSelectFolder={selectFolder}
+        onDropHandle={setHandle}
         onReconnect={reconnect}
         isReconnect
       />

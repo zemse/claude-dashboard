@@ -41,6 +41,11 @@ export function useFolder() {
     }
   }, []);
 
+  const setHandle = useCallback(async (handle: FileSystemDirectoryHandle) => {
+    await saveDirectoryHandle(handle);
+    setState({ status: "ready", handle });
+  }, []);
+
   const reconnect = useCallback(async () => {
     if (state.status !== "needs-permission") return;
     const granted = await requestPermission(state.handle);
@@ -54,5 +59,5 @@ export function useFolder() {
     setState({ status: "no-handle" });
   }, []);
 
-  return { state, selectFolder, reconnect, disconnect };
+  return { state, selectFolder, setHandle, reconnect, disconnect };
 }

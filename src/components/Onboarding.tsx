@@ -7,24 +7,30 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FolderOpen, Shield, Terminal } from "lucide-react";
+import { FolderOpen, Shield, Terminal, Copy, Check } from "lucide-react";
 
 interface OnboardingProps {
   onSelectFolder: () => void;
+  onDropHandle: (handle: FileSystemDirectoryHandle) => void;
   onReconnect?: () => void;
   isReconnect?: boolean;
 }
 
+const COMMAND = "open ~/.claude";
+
 export function Onboarding({
   onSelectFolder,
+  onDropHandle,
   onReconnect,
   isReconnect,
 }: OnboardingProps) {
   const [isDragging, setIsDragging] = useState(false);
+  const [dropError, setDropError] = useState<string | null>(null);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(true);
+    setDropError(null);
   }, []);
 
   const handleDragLeave = useCallback(() => {
@@ -35,12 +41,35 @@ export function Onboarding({
     async (e: React.DragEvent) => {
       e.preventDefault();
       setIsDragging(false);
-      // Dropping a folder triggers the select flow
-      // The FSA API doesn't support drops directly on all browsers
-      // so we fall back to the picker
-      onSelectFolder();
+      setDropError(null);
+
+      const items = e.dataTransfer.items;
+      if (!items || items.length === 0) {
+        onSelectFolder();
+        return;
+      }
+
+      const item = items[0];
+      if (typeof item.getAsFileSystemHandle !== "function") {
+        // Browser doesn't support getAsFileSystemHandle, fall back to picker
+        setDropError(
+          "Drag & drop not supported in this browser. Use the button instead."
+        );
+        return;
+      }
+
+      try {
+        const handle = await item.getAsFileSystemHandle();
+        if (!handle || handle.kind !== "directory") {
+          setDropError("Please drop a folder, not a file.");
+          return;
+        }
+        onDropHandle(handle as FileSystemDirectoryHandle);
+      } catch {
+        setDropError("Could not read dropped folder. Try the button instead.");
+      }
     },
-    [onSelectFolder]
+    [onSelectFolder, onDropHandle]
   );
 
   if (isReconnect) {
@@ -79,8 +108,8 @@ export function Onboarding({
         <CardHeader className="text-center">
           <CardTitle className="text-2xl">Claude Code Dashboard</CardTitle>
           <CardDescription className="text-base mt-2">
-            Visualize your Claude Code token usage and estimated API costs.
-            All data stays on your machine.
+            Visualize your Claude Code token usage and estimated API costs. All
+            data stays on your machine.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -89,12 +118,12 @@ export function Onboarding({
               number={1}
               icon={<Terminal className="h-4 w-4" />}
               text="Open Terminal and run:"
-              code="open ~/.claude/projects"
+              code={COMMAND}
             />
             <Step
               number={2}
               icon={<FolderOpen className="h-4 w-4" />}
-              text='Select the "projects" folder below'
+              text='Drag the "projects" folder below, or click to browse'
             />
           </div>
 
@@ -116,6 +145,10 @@ export function Onboarding({
             </p>
           </div>
 
+          {dropError && (
+            <p className="text-sm text-destructive text-center">{dropError}</p>
+          )}
+
           <div className="flex items-center gap-2 text-xs text-muted-foreground justify-center">
             <Shield className="h-3 w-3" />
             <span>All data stays on your machine - nothing is uploaded</span>
@@ -123,6 +156,35 @@ export function Onboarding({
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      navigator.clipboard.writeText(text).then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      });
+    },
+    [text]
+  );
+
+  return (
+    <button
+      onClick={handleCopy}
+      className="p-1 rounded hover:bg-foreground/10 transition-colors"
+      title="Copy to clipboard"
+    >
+      {copied ? (
+        <Check className="h-3 w-3 text-green-500" />
+      ) : (
+        <Copy className="h-3 w-3 text-muted-foreground" />
+      )}
+    </button>
   );
 }
 
@@ -148,9 +210,10 @@ function Step({
           <span>{text}</span>
         </div>
         {code && (
-          <code className="block text-xs bg-muted px-2 py-1 rounded font-mono">
-            {code}
-          </code>
+          <div className="flex items-center gap-1 bg-muted rounded px-2 py-1">
+            <code className="text-xs font-mono flex-1">{code}</code>
+            <CopyButton text={code} />
+          </div>
         )}
       </div>
     </div>

@@ -13,3 +13,7 @@ interface Window {
     mode?: "read" | "readwrite";
   }): Promise<FileSystemDirectoryHandle>;
 }
+
+interface DataTransferItem {
+  getAsFileSystemHandle(): Promise<FileSystemHandle | null>;
+}
