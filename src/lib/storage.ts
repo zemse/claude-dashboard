@@ -33,11 +33,24 @@ export async function clearDirectoryHandle(): Promise<void> {
   await db.delete(STORE_NAME, HANDLE_KEY);
 }
 
+export async function queryPermission(
+  handle: FileSystemDirectoryHandle
+): Promise<"granted" | "denied" | "prompt"> {
+  try {
+    return await handle.queryPermission({ mode: "read" });
+  } catch {
+    return "denied";
+  }
+}
+
 export async function requestPermission(
   handle: FileSystemDirectoryHandle
 ): Promise<boolean> {
-  const options = { mode: "read" as const };
-  if ((await handle.queryPermission(options)) === "granted") return true;
-  if ((await handle.requestPermission(options)) === "granted") return true;
+  try {
+    if ((await handle.requestPermission({ mode: "read" })) === "granted")
+      return true;
+  } catch {
+    // requestPermission can throw if no user gesture
+  }
   return false;
 }

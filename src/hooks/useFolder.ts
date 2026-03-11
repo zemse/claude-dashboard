@@ -3,6 +3,7 @@ import {
   saveDirectoryHandle,
   getSavedDirectoryHandle,
   clearDirectoryHandle,
+  queryPermission,
   requestPermission,
 } from "@/lib/storage";
 
@@ -22,10 +23,12 @@ export function useFolder() {
         setState({ status: "no-handle" });
         return;
       }
-      const granted = await requestPermission(handle);
-      if (granted) {
+      // queryPermission works without a user gesture
+      const permission = await queryPermission(handle);
+      if (permission === "granted") {
         setState({ status: "ready", handle });
       } else {
+        // "prompt" or "denied" — need user click to re-grant
         setState({ status: "needs-permission", handle });
       }
     })();
